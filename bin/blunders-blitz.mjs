@@ -8,6 +8,9 @@
 //   alert             "<message>" [--title T] [--source S]
 //   alert-if-running  "<message>" [--title T] [--source S]
 //   dismiss
+//   handle-event      (reads normalized JSON event on stdin and routes it)
+//   hook <agent>      (translates an agent's native hook payload, then routes)
+//                       agents: claude, codex, cursor, gemini, copilot
 //   install-skill     [--dir <skills-dir>] [--force]
 
 import { spawn } from "node:child_process";
@@ -286,6 +289,135 @@ async function cmdInstallSkill(args) {
   return 0;
 }
 
+// ─── Normalized event pipeline ──────────────────────────────────────────────
+//
+// `handle-event` is the single internal entry point for agent-hook driven
+// pings. It accepts a normalized JSON event on stdin and decides what (if
+// anything) to show in the chess tab. Per-agent translators (cmdHook) parse
+// each agent's native payload and emit this shape.
+//
+// {
+//   event:    "task.complete" | "input.required" | "error" | "session.start"
+//   source:   "claude" | "codex" | "cursor" | "gemini" | "copilot" | string
+//   message?: string        (optional — short detail to put in the modal)
+//   title?:   string        (optional — overrides default title)
+//   cwd?:     string
+//   session_id?: string
+// }
+//
+// Policy: task.complete / input.required / error fire alert-if-running (silent
+// no-op when the chess server isn't up). session.start is intentionally
+// ignored — starting a new agent session shouldn't ping a player mid-game.
+
+const EVENT_POLICY = {
+  "task.complete": { title: "Back to you", urgency: "done" },
+  "input.required": { title: "Needs your input", urgency: "input" },
+  error: { title: "Ran into an error", urgency: "error" },
+  "session.start": null, // explicit no-op
+};
+
+async function readStdinJson() {
+  if (process.stdin.isTTY) return null;
+  let buf = "";
+  for await (const chunk of process.stdin) buf += chunk;
+  buf = buf.trim();
+  if (!buf) return null;
+  try {
+    const parsed = JSON.parse(buf);
+    return typeof parsed === "object" && parsed ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function sourceLabel(source) {
+  if (!source) return undefined;
+  const map = {
+    claude: "Claude",
+    codex: "Codex",
+    cursor: "Cursor",
+    gemini: "Gemini",
+    copilot: "Copilot",
+  };
+  return map[String(source).toLowerCase()] || source;
+}
+
+async function dispatchNormalizedEvent(evt) {
+  if (!evt || typeof evt !== "object") return 0;
+  const policy = EVENT_POLICY[evt.event];
+  if (policy === null) return 0; // explicit skip (e.g. session.start)
+  if (!policy) return 0; // unknown event → silent no-op
+
+  const state = await readState();
+  if (!(await isRunning(state))) return 0;
+
+  const fakeArgs = {
+    _: evt.message ? [String(evt.message)] : [],
+    flags: {
+      title: typeof evt.title === "string" ? evt.title : policy.title,
+      source: sourceLabel(evt.source),
+    },
+  };
+  // sendAlert needs *some* content — guarantee at least a title.
+  if (!fakeArgs._.length && !fakeArgs.flags.title) {
+    fakeArgs.flags.title = policy.title;
+  }
+  return sendAlert(state, fakeArgs);
+}
+
+async function cmdHandleEvent() {
+  const evt = await readStdinJson();
+  return dispatchNormalizedEvent(evt || {});
+}
+
+// ─── Per-agent translators ──────────────────────────────────────────────────
+//
+// Each translator takes the agent's native payload (argv tail + stdin JSON)
+// and produces a normalized event. The TRANSLATORS map is the single
+// extension point — add a new agent by writing one function and registering
+// it here. Translation logic for non-Claude agents (added in later releases)
+// is adapted from peon-ping (MIT) — see THIRD_PARTY_NOTICES.md.
+
+function translateClaude(argv, stdin) {
+  const hookEvent = (stdin && stdin.hook_event_name) || "";
+  if (hookEvent === "Notification") {
+    const ntype = (stdin && stdin.notification_type) || "";
+    return {
+      event: "input.required",
+      source: "claude",
+      message: ntype ? String(ntype) : undefined,
+      cwd: stdin && stdin.cwd,
+      session_id: stdin && stdin.session_id,
+    };
+  }
+  // Default for Stop and anything else: task.complete.
+  return {
+    event: "task.complete",
+    source: "claude",
+    cwd: stdin && stdin.cwd,
+    session_id: stdin && stdin.session_id,
+  };
+}
+
+const TRANSLATORS = {
+  claude: translateClaude,
+};
+
+async function cmdHook(args) {
+  const agent = (args._[0] || "").toLowerCase();
+  if (!agent || !TRANSLATORS[agent]) {
+    console.error(
+      `✗ unknown hook agent: "${agent || "(none)"}"\n` +
+        `  known: ${Object.keys(TRANSLATORS).join(", ")}`
+    );
+    return 1;
+  }
+  const stdin = await readStdinJson();
+  const evt = TRANSLATORS[agent](args._.slice(1), stdin || {});
+  if (!evt) return 0; // translator chose to skip
+  return dispatchNormalizedEvent(evt);
+}
+
 function printHelp() {
   console.log(`blunders-blitz — local chess companion CLI
 
@@ -296,6 +428,8 @@ Usage:
   blunders-blitz alert "<message>" [--title "Title"] [--source "Claude"]
   blunders-blitz alert-if-running "<message>" [--title "Title"] [--source "Claude"]
   blunders-blitz dismiss
+  blunders-blitz handle-event                       # reads normalized event JSON on stdin
+  blunders-blitz hook <agent>                       # claude | codex | cursor | gemini | copilot
   blunders-blitz install-skill [--dir <skills-dir>] [--force]
 
 Environment:
@@ -306,6 +440,11 @@ Typical usage from an assistant:
   blunders-blitz start                             # launch the game
   blunders-blitz alert "Need your input on Foo"    # ping when done
   blunders-blitz dismiss                           # clear when user replies
+
+Wiring into an agent's hook system (preferred over manual alerts):
+  Claude Code:   add a Stop hook that runs:   blunders-blitz hook claude
+  Codex CLI:     notify = ["blunders-blitz", "hook", "codex"]
+  See SKILL.md for full per-agent wiring.
 `);
 }
 
@@ -327,6 +466,10 @@ async function main() {
       return cmdAlert(args);
     case "alert-if-running":
       return cmdAlertIfRunning(args);
+    case "handle-event":
+      return cmdHandleEvent();
+    case "hook":
+      return cmdHook(args);
     case "dismiss":
       return cmdDismiss();
     case "install-skill":

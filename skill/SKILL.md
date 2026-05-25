@@ -83,12 +83,15 @@ blunders-blitz stop          # shut down the local server
    the dialog so it doesn't linger:
    - `blunders-blitz dismiss`
 
-## Guaranteed pings via a Stop hook (recommended)
+## Guaranteed pings via Claude Code hooks (recommended)
 
 Skill instructions are guidance, not enforcement — an assistant can still
 forget to call `alert` at the end of a long run. For belt-and-suspenders
-reliability, drop this into `~/.claude/settings.json` so Claude Code itself
-fires the alert when the turn ends:
+reliability, wire `blunders-blitz hook claude` into `~/.claude/settings.json`
+so Claude Code itself fires the alert at hook events. The same command
+handles both **Stop** (turn ended → "Back to you") and **Notification**
+(permission prompt / awaiting input → "Needs your input"); it reads the
+hook event name from stdin to pick the right modal.
 
 ```jsonc
 {
@@ -96,10 +99,14 @@ fires the alert when the turn ends:
     "Stop": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "blunders-blitz alert-if-running 'Claude is back to you' --source Claude"
-          }
+          { "type": "command", "command": "blunders-blitz hook claude" }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          { "type": "command", "command": "blunders-blitz hook claude" }
         ]
       }
     ]
@@ -107,9 +114,10 @@ fires the alert when the turn ends:
 }
 ```
 
-`alert-if-running` is a silent no-op when the chess server isn't up, so this
-hook is safe to leave on globally — it only pings on sessions where the user
-actually started the game.
+`blunders-blitz hook claude` (like the underlying `alert-if-running`) is a
+silent no-op when the chess server isn't up, so this hook block is safe to
+leave on globally — it only pings on sessions where the user actually
+started the game.
 
 ## Notes & gotchas
 

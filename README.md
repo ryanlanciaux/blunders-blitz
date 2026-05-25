@@ -95,8 +95,11 @@ Claude will run `blunders-blitz start`, work on the task, then call
 `blunders-blitz alert "..."` when it's done. After you reply, it'll
 `blunders-blitz dismiss` so the dialog disappears.
 
-**Other tools (Codex, Cursor, generic shell-equipped LLMs)** — the same CLI
-verbs work. Tell your tool: "When you need my attention, run
+**Other tools (Codex, Cursor, Gemini, Copilot, generic shell-equipped LLMs)**
+— the same CLI verbs work. The most reliable path is to wire the agent's
+hook system to `blunders-blitz hook <agent>`; per-agent snippets are in
+[`skill/SKILL.md`](skill/SKILL.md). For agents without a hook system,
+just tell the tool: "When you need my attention, run
 `blunders-blitz alert '<message>'`. When I respond, run `blunders-blitz dismiss`."
 
 ## Deploying as a static site
@@ -167,6 +170,17 @@ blunders-blitz/
 
 Visual design (logo, color palette, type) borrowed from
 [blunders.ai](https://blunders.ai).
+
+## Prior art
+
+The multi-agent hook architecture (the adapter-shim pattern, the event-type
+taxonomy distinguishing `task.complete` / `input.required` / `error`, and the
+per-agent translation logic for Codex / Cursor / Gemini / Copilot) is
+deliberately modeled on **[peon-ping](https://github.com/PeonPing/peon-ping)**
+by Tony Sheng (MIT). Several translators in `bin/blunders-blitz.mjs` are
+adapted from peon-ping's `adapters/*.sh` and carry per-function attribution
+comments. Full notice and license text in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 ## Licensing
 
