@@ -2,12 +2,13 @@
 // blunders-blitz CLI — control the local chess companion.
 //
 // Subcommands:
-//   start          [--port N] [--no-open] [--foreground]
+//   start             [--port N] [--no-open] [--foreground]
 //   stop
 //   status
-//   alert          "<message>" [--title T] [--source S]
+//   alert             "<message>" [--title T] [--source S]
+//   alert-if-running  "<message>" [--title T] [--source S]
 //   dismiss
-//   install-skill  [--dir <skills-dir>] [--force]
+//   install-skill     [--dir <skills-dir>] [--force]
 
 import { spawn } from "node:child_process";
 import { readFile, writeFile, mkdir, rm, copyFile, stat } from "node:fs/promises";
@@ -204,8 +205,7 @@ async function ensureRunning() {
   return state;
 }
 
-async function cmdAlert(args) {
-  const state = await ensureRunning();
+async function sendAlert(state, args) {
   const message = args._.join(" ").trim();
   if (!message && !args.flags.title) {
     console.error(
@@ -230,6 +230,20 @@ async function cmdAlert(args) {
   const data = await res.json();
   console.log(`▸ alert sent (id ${data.alert.id})`);
   return 0;
+}
+
+async function cmdAlert(args) {
+  const state = await ensureRunning();
+  return sendAlert(state, args);
+}
+
+// Like `alert`, but exits 0 silently when the server isn't running.
+// Intended for Claude Code Stop hooks that should be no-ops on
+// machines/sessions where the chess companion isn't active.
+async function cmdAlertIfRunning(args) {
+  const state = await readState();
+  if (!(await isRunning(state))) return 0;
+  return sendAlert(state, args);
 }
 
 async function cmdDismiss() {
@@ -280,6 +294,7 @@ Usage:
   blunders-blitz stop
   blunders-blitz status
   blunders-blitz alert "<message>" [--title "Title"] [--source "Claude"]
+  blunders-blitz alert-if-running "<message>" [--title "Title"] [--source "Claude"]
   blunders-blitz dismiss
   blunders-blitz install-skill [--dir <skills-dir>] [--force]
 
@@ -310,6 +325,8 @@ async function main() {
       return cmdStatus();
     case "alert":
       return cmdAlert(args);
+    case "alert-if-running":
+      return cmdAlertIfRunning(args);
     case "dismiss":
       return cmdDismiss();
     case "install-skill":

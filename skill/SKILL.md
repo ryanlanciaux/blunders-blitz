@@ -38,6 +38,11 @@ blunders-blitz start
 blunders-blitz alert "Finished refactoring the auth flow — ready for review" \
   --title "Done" --source "Claude"
 
+# 2b. Same as `alert`, but a silent no-op (exit 0) if the server isn't
+#     running. Use this from Claude Code Stop hooks so the hook is safe
+#     to leave on globally — it only pings when the chess tab is up.
+blunders-blitz alert-if-running "Claude is back to you" --source "Claude"
+
 # 3. After the user replies in the terminal, clear the modal so it's gone
 #    if they switch back to the chess tab.
 blunders-blitz dismiss
@@ -61,13 +66,50 @@ blunders-blitz stop          # shut down the local server
    - `blunders-blitz alert "Need a decision: should the migration drop the old column or keep both?"`
    - Keep messages concise. Title is optional (defaults to "Needs your attention").
 
-3. **Task complete** — always alert when the work is done so the user can come
-   back from the chess tab:
-   - `blunders-blitz alert "All tests pass on the new schema — back to you." --title "Done"`
+3. **Task complete — THIS STEP IS NON-OPTIONAL.** The whole point of starting
+   the chess game is that the user has walked away from the terminal. If you
+   finish the task without firing an alert, they will never know you're done.
+   Always run this as the literal last action of the turn, before your final
+   chat message:
+   - `blunders-blitz alert "All tests pass on the new schema — back to you." --title "Done" --source "Claude"`
+
+   If you started the chess game earlier in the session, you **must** alert at
+   the end — even if the task ended up shorter than expected, even if you're
+   just stopping to ask a question, even if you think they might still be at
+   the keyboard. The cost of an unnecessary ping is ~zero; the cost of a
+   missed ping is the user waiting indefinitely.
 
 4. **When the user responds** — as soon as their next message comes in, clear
    the dialog so it doesn't linger:
    - `blunders-blitz dismiss`
+
+## Guaranteed pings via a Stop hook (recommended)
+
+Skill instructions are guidance, not enforcement — an assistant can still
+forget to call `alert` at the end of a long run. For belt-and-suspenders
+reliability, drop this into `~/.claude/settings.json` so Claude Code itself
+fires the alert when the turn ends:
+
+```jsonc
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "blunders-blitz alert-if-running 'Claude is back to you' --source Claude"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`alert-if-running` is a silent no-op when the chess server isn't up, so this
+hook is safe to leave on globally — it only pings on sessions where the user
+actually started the game.
 
 ## Notes & gotchas
 
