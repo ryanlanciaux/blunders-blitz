@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0A1628" />
+    <title>Blunders Blitz</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oxanium:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a
+        class="brand"
+        href="https://blunders.ai"
+        target="_blank"
+        rel="noopener"
+        aria-label="Go to blunders.ai"
+      >
+        <img src="/blunders-logo.svg" alt="Blunders" />
+        <span class="brand-tag">Local Game</span>
+      </a>
+      <div class="topbar-actions">
+        <label class="select-label" for="elo">
+          <span>Strength</span>
+          <select id="elo" class="select">
+            <option value="800">Beginner — 800 Elo</option>
+            <option value="1000">Casual — 1000 Elo</option>
+            <option value="1200">Club — 1200 Elo</option>
+            <option value="1400" selected>Improver — 1400 Elo</option>
+            <option value="1600">Intermediate — 1600 Elo</option>
+            <option value="1800">Advanced — 1800 Elo</option>
+            <option value="2000">Expert — 2000 Elo</option>
+            <option value="2200">Master — 2200 Elo</option>
+            <option value="2500">Stockfish — 2500 Elo</option>
+            <option value="3000">Full Strength — 3000 Elo</option>
+          </select>
+        </label>
+        <button id="new-game" class="btn btn-primary" type="button">New Game</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="board-pane">
+        <div class="board-shell">
+          <div id="board" class="board" role="grid" aria-label="Chess board"></div>
+
+          <div id="picker-overlay" class="board-overlay">
+            <div class="picker">
+              <div class="picker-title">Play as</div>
+              <div class="picker-cards">
+                <button class="picker-card" data-color="white" type="button">
+                  <img src="/pieces/kosal/white_pawn.svg" alt="" />
+                  <div class="picker-card-label">White</div>
+                  <div class="picker-card-sub">You move first</div>
+                </button>
+                <button class="picker-card" data-color="black" type="button">
+                  <img src="/pieces/kosal/black_pawn.svg" alt="" />
+                  <div class="picker-card-label">Black</div>
+                  <div class="picker-card-sub">Engine moves first</div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="gameover-overlay" class="board-overlay" hidden>
+            <div class="overlay-content">
+              <div id="overlay-title" class="overlay-title">Game Over</div>
+              <button class="btn btn-primary" id="overlay-new">New Game</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-pane">
+        <div class="card">
+          <div class="card-row">
+            <div class="meta">
+              <div class="meta-label">You</div>
+              <div class="meta-value" id="player-name">White</div>
+            </div>
+            <div class="meta">
+              <div class="meta-label">Engine</div>
+              <div class="meta-value" id="engine-name">Stockfish 1400</div>
+            </div>
+            <div class="meta">
+              <div class="meta-label">Status</div>
+              <div class="meta-value" id="status">Your move</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card moves-card">
+          <div class="card-title">Moves</div>
+          <ol id="moves" class="moves"></ol>
+        </div>
+
+        <div class="card alert-status-card">
+          <div class="card-title">LLM Channel</div>
+          <div class="alert-status" id="conn-status">
+            <span class="dot" id="conn-dot"></span>
+            <span id="conn-text">Connecting…</span>
+          </div>
+          <p class="muted small">
+            Started via <code>blunders-blitz start</code>. Your assistant can ping you here
+            when it needs your attention.
+          </p>
+        </div>
+
+        <a class="upsell" href="https://blunders.ai" target="_blank" rel="noopener">
+          Love chess? Check out blunders.ai →
+        </a>
+      </aside>
+    </main>
+
+    <!-- LLM Attention Dialog -->
+    <div
+      id="attention-dialog"
+      class="dialog-backdrop"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="attention-title"
+    >
+      <div class="dialog">
+        <div class="dialog-accent"></div>
+        <div class="dialog-body">
+          <div class="dialog-eyebrow" id="attention-source">Claude</div>
+          <h2 class="dialog-title" id="attention-title">Needs your attention</h2>
+          <p class="dialog-message" id="attention-message">
+            Your assistant is waiting on you.
+          </p>
+        </div>
+        <div class="dialog-footer">
+          <button id="dialog-dismiss" class="btn btn-primary" type="button">
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,43 @@
+{
+  "name": "@blunders/blitz",
+  "version": "0.1.0",
+  "description": "Standalone chess game vs Stockfish — designed to run while your LLM works in the background and ping you when it needs attention.",
+  "type": "module",
+  "bin": {
+    "blunders-blitz": "bin/blunders-blitz.mjs"
+  },
+  "scripts": {
+    "start": "node server/server.mjs",
+    "dev": "node server/server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "(MIT AND GPL-3.0-or-later AND CC-BY-4.0 AND BSD-2-Clause)",
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ryanlanciaux",
+  "homepage": "https://blunders.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ryanlanciaux/blunders-blitz.git"
+  },
+  "bugs": {
+    "url": "https://spaceship.studio"
+  },
+  "keywords": [
+    "chess",
+    "mcp",
+    "ai",
+    "skill"
+  ],
+  "files": [
+    "bin/",
+    "server/",
+    "public/",
+    "skill/",
+    "LICENSE",
+    "README.md"
+  ]
+}
