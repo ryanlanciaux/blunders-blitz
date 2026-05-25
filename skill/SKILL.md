@@ -119,6 +119,30 @@ silent no-op when the chess server isn't up, so this hook block is safe to
 leave on globally — it only pings on sessions where the user actually
 started the game.
 
+## Wiring other agents
+
+The same `blunders-blitz hook <agent>` pattern works for non-Claude agents.
+Each one reads that agent's native hook event format on stdin, normalizes
+it to a `task.complete` / `input.required` / `error` event, and routes
+through the same dispatcher Claude uses. Like the Claude wiring, all of
+these are silent no-ops when the chess server isn't running.
+
+### Codex CLI
+
+Codex CLI fires a notify hook at end of turn. Add to `~/.codex/config.toml`:
+
+```toml
+notify = ["blunders-blitz", "hook", "codex"]
+```
+
+Codex passes the event name as the first argument (e.g.
+`agent-turn-complete`, `permission-requested`) and an optional JSON
+payload on stdin. The translator detects permission-style events
+(including `notification_type = "permission_prompt"`) and routes them as
+"Needs your input"; everything else is treated as "Back to you." Errors
+from Codex error-style events surface as the red "Ran into an error"
+modal.
+
 ## Notes & gotchas
 
 - **The CLI is a no-op outside the local machine.** It only works when the

@@ -3,6 +3,17 @@
 All notable changes to Blunders Blitz. Versions before `0.6.0` were
 internal-only — the public npm release jumps from `0.2.0` to `0.6.0`.
 
+## 0.4.0 — Internal (not published)
+
+### Added
+- `blunders-blitz hook codex` — translates OpenAI Codex CLI's notify
+  payload (event-name argv + optional JSON stdin) into the normalized
+  event pipeline. Distinguishes permission/approval prompts from
+  agent-turn-complete from error events. Translation logic adapted from
+  peon-ping's `adapters/codex.sh`.
+- SKILL.md "Wiring other agents → Codex CLI" section with the
+  `~/.codex/config.toml` snippet.
+
 ## 0.3.0 — Internal (not published)
 
 ### Added

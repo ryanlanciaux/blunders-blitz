@@ -399,8 +399,60 @@ function translateClaude(argv, stdin) {
   };
 }
 
+function translateCodex(argv, stdin) {
+  // Adapted from peon-ping (MIT): adapters/codex.sh
+  // Codex's notify hook calls us with: <event-name> as argv[0] and an
+  // optional JSON payload on stdin. The event name space is unstable
+  // (Codex has shipped both `agent-turn-complete` and `agent_turn_complete`,
+  // and signals permission prompts via a `notification_type` field) so we
+  // normalize aggressively before bucketing.
+  const rawEvent = (
+    argv[0] ||
+    (stdin && (stdin.hook_event_name || stdin.event || stdin.type)) ||
+    "agent-turn-complete"
+  )
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, "-");
+  const notifType = ((stdin && stdin.notification_type) || "")
+    .toString()
+    .toLowerCase();
+
+  let event;
+  if (
+    rawEvent.startsWith("permission") ||
+    rawEvent.startsWith("approve") ||
+    rawEvent === "approval-requested" ||
+    rawEvent === "approval-needed" ||
+    rawEvent === "input-required" ||
+    rawEvent === "idle-prompt" ||
+    notifType === "permission_prompt"
+  ) {
+    event = "input.required";
+  } else if (rawEvent === "start" || rawEvent === "session-start") {
+    event = "session.start";
+  } else if (rawEvent.startsWith("error") || rawEvent.startsWith("fail")) {
+    event = "error";
+  } else {
+    event = "task.complete";
+  }
+
+  const message =
+    (stdin && (stdin.transcript_summary || stdin.summary || stdin.message)) ||
+    undefined;
+  return {
+    event,
+    source: "codex",
+    message: typeof message === "string" ? message.slice(0, 120) : undefined,
+    cwd: stdin && (stdin.cwd || stdin.workspace_root),
+    session_id: stdin && (stdin.session_id || stdin.conversation_id),
+  };
+}
+
 const TRANSLATORS = {
   claude: translateClaude,
+  codex: translateCodex,
 };
 
 async function cmdHook(args) {
