@@ -3,6 +3,20 @@
 All notable changes to Blunders Blitz. Versions before `0.6.0` were
 internal-only — the public npm release jumps from `0.2.0` to `0.6.0`.
 
+## 0.5.0 — Internal (not published)
+
+### Added
+- `blunders-blitz hook cursor` — translator for Cursor IDE's hook events
+  (`stop`, `afterFileEdit`, `beforeShellExecution`, `beforeMCPExecution`,
+  …). Adapted from peon-ping's `adapters/cursor.sh`. `beforeReadFile` is
+  dropped to avoid noise.
+- `blunders-blitz hook gemini` — translator for Gemini CLI's hook events
+  (`SessionStart`, `AfterAgent`, `Notification`, `AfterTool`). On
+  `AfterTool` with non-zero `exit_code`, surfaces the captured `stderr`
+  as the modal message. Adapted from peon-ping's `adapters/gemini.sh`.
+- SKILL.md "Wiring other agents" sections for Cursor (`~/.cursor/hooks.json`
+  snippet) and Gemini CLI.
+
 ## 0.4.0 — Internal (not published)
 
 ### Added

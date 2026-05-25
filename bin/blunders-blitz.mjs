@@ -450,9 +450,83 @@ function translateCodex(argv, stdin) {
   };
 }
 
+function translateCursor(argv, stdin) {
+  // Adapted from peon-ping (MIT): adapters/cursor.sh
+  // Cursor's hooks.json fires a small fixed event name (stop,
+  // beforeShellExecution, beforeMCPExecution, afterFileEdit,
+  // beforeReadFile, …) as argv[0] with a JSON conversation payload on
+  // stdin. beforeReadFile is dropped — it's far too chatty to be useful
+  // as a "needs attention" signal.
+  const raw = (argv[0] || "stop").toString();
+  let event;
+  switch (raw) {
+    case "stop":
+    case "afterFileEdit":
+      event = "task.complete";
+      break;
+    case "beforeShellExecution":
+    case "beforeMCPExecution":
+      event = "input.required";
+      break;
+    case "beforeReadFile":
+      return null;
+    default:
+      event = "task.complete";
+  }
+  const cwd =
+    (stdin && stdin.workspace_roots && stdin.workspace_roots[0]) ||
+    (stdin && stdin.cwd) ||
+    undefined;
+  return {
+    event,
+    source: "cursor",
+    cwd,
+    session_id: stdin && stdin.conversation_id,
+  };
+}
+
+function translateGemini(argv, stdin) {
+  // Adapted from peon-ping (MIT): adapters/gemini.sh
+  // Gemini CLI fires hooks with a CamelCase event name as argv[0]
+  // (SessionStart, AfterAgent, Notification, AfterTool, …) and a JSON
+  // payload on stdin. AfterTool carries an exit_code; non-zero is the
+  // only way Gemini surfaces "a tool just failed," so we promote it to
+  // an error event with the captured stderr as the modal message.
+  const raw = (argv[0] || "SessionStart").toString();
+  let event;
+  switch (raw) {
+    case "SessionStart":
+      event = "session.start";
+      break;
+    case "AfterAgent":
+      event = "task.complete";
+      break;
+    case "Notification":
+      event = "input.required";
+      break;
+    case "AfterTool": {
+      const exit = stdin ? Number(stdin.exit_code || 0) : 0;
+      event = exit !== 0 ? "error" : "task.complete";
+      break;
+    }
+    default:
+      return null;
+  }
+  return {
+    event,
+    source: "gemini",
+    message:
+      stdin && stdin.stderr ? String(stdin.stderr).slice(0, 180) : undefined,
+    cwd: stdin && stdin.cwd,
+    session_id: stdin && stdin.session_id,
+  };
+}
+
 const TRANSLATORS = {
   claude: translateClaude,
   codex: translateCodex,
+  cursor: translateCursor,
+  gemini: translateGemini,
 };
 
 async function cmdHook(args) {

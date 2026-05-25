@@ -143,6 +143,34 @@ payload on stdin. The translator detects permission-style events
 from Codex error-style events surface as the red "Ran into an error"
 modal.
 
+### Cursor
+
+Add to `~/.cursor/hooks.json`:
+
+```json
+{
+  "hooks": [
+    { "event": "stop", "command": "blunders-blitz hook cursor stop" },
+    { "event": "beforeShellExecution", "command": "blunders-blitz hook cursor beforeShellExecution" },
+    { "event": "beforeMCPExecution", "command": "blunders-blitz hook cursor beforeMCPExecution" }
+  ]
+}
+```
+
+`stop` and `afterFileEdit` fire "Back to you"; `beforeShellExecution` and
+`beforeMCPExecution` (which Cursor uses to ask for permission) fire
+"Needs your input." `beforeReadFile` is intentionally dropped at the
+translator — it's far too chatty.
+
+### Gemini CLI
+
+Wire each Gemini hook event you care about to a command of the form
+`blunders-blitz hook gemini <EventName>`. The translator recognises
+`SessionStart` (skipped — no ping on session boot), `AfterAgent`
+(→ task.complete), `Notification` (→ input.required), and `AfterTool`
+(→ task.complete on success, → error on non-zero `exit_code`, with the
+captured `stderr` surfaced as the modal message).
+
 ## Notes & gotchas
 
 - **The CLI is a no-op outside the local machine.** It only works when the
