@@ -171,6 +171,31 @@ Wire each Gemini hook event you care about to a command of the form
 (→ task.complete on success, → error on non-zero `exit_code`, with the
 captured `stderr` surfaced as the modal message).
 
+### GitHub Copilot
+
+Add to your repo's `.github/hooks/hooks.json`:
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      { "type": "command", "bash": "blunders-blitz hook copilot postToolUse" }
+    ],
+    "errorOccurred": [
+      { "type": "command", "bash": "blunders-blitz hook copilot errorOccurred" }
+    ]
+  }
+}
+```
+
+Caveat — Copilot has no clean "agent done" hook the way Claude and Codex
+do, so `postToolUse` is used as a proxy for completion. That means
+you'll get a "Back to you" ping after each tool use, not only at the
+end of the turn. If that's too chatty, drop the `postToolUse` block and
+keep only `errorOccurred` — you'll still be alerted on failures, you
+just won't get a green completion ping.
+
 ## Notes & gotchas
 
 - **The CLI is a no-op outside the local machine.** It only works when the

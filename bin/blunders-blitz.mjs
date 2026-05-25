@@ -522,11 +522,46 @@ function translateGemini(argv, stdin) {
   };
 }
 
+function translateCopilot(argv, stdin) {
+  // Adapted from peon-ping (MIT): adapters/copilot.sh
+  // GitHub Copilot's repo-level hooks.json fires events with camelCase
+  // names. `postToolUse` is used here as the "task complete" signal,
+  // matching peon-ping's choice — it's an approximation (it fires after
+  // every tool, not just session end) but Copilot doesn't currently
+  // expose a cleaner "agent done" event. Drop it from the hooks list
+  // if it gets too chatty and keep only `errorOccurred`.
+  const raw = (argv[0] || "sessionStart").toString();
+  let event;
+  switch (raw) {
+    case "sessionStart":
+      event = "session.start";
+      break;
+    case "postToolUse":
+      event = "task.complete";
+      break;
+    case "errorOccurred":
+      event = "error";
+      break;
+    case "sessionEnd":
+    case "userPromptSubmitted":
+    case "preToolUse":
+    default:
+      return null;
+  }
+  return {
+    event,
+    source: "copilot",
+    cwd: stdin && stdin.cwd,
+    session_id: stdin && stdin.sessionId,
+  };
+}
+
 const TRANSLATORS = {
   claude: translateClaude,
   codex: translateCodex,
   cursor: translateCursor,
   gemini: translateGemini,
+  copilot: translateCopilot,
 };
 
 async function cmdHook(args) {
