@@ -83,53 +83,48 @@ blunders-blitz stop          # shut down the local server
    the dialog so it doesn't linger:
    - `blunders-blitz dismiss`
 
-## Guaranteed pings via Claude Code hooks (recommended)
+## Guaranteed pings via hooks (recommended)
 
 Skill instructions are guidance, not enforcement — an assistant can still
 forget to call `alert` at the end of a long run. For belt-and-suspenders
-reliability, wire `blunders-blitz hook claude` into `~/.claude/settings.json`
-so Claude Code itself fires the alert at hook events. The same command
-handles both **Stop** (turn ended → "Back to you") and **Notification**
-(permission prompt / awaiting input → "Needs your input"); it reads the
-hook event name from stdin to pick the right modal.
+reliability, wire `blunders-blitz hook <agent>` into your AI tool's hook
+system so the tool itself fires the alert when its turn ends.
+
+**Easiest path — `blunders-blitz install`.** Runs an interactive picker,
+detects which AI tools you have, and patches each one's config file for
+you. Idempotent (re-runs are safe), atomic, and leaves a `.bak` of any
+file it modifies on first edit. Tell the user to run this once:
+
+```
+blunders-blitz install
+```
+
+That covers Claude Code (SKILL.md + Stop/Notification hooks), Codex CLI,
+Cursor, Gemini CLI, and GitHub Copilot (per-repo, run from the repo
+root).
+
+### Manual setup (if you'd rather edit configs yourself)
+
+The wizard writes exactly the snippets below. Use these if you want to
+inspect the diff before applying or customize the wiring beyond what the
+default wizard does.
+
+`blunders-blitz hook <agent>` is a silent no-op when the chess server
+isn't up, so any of these hooks are safe to leave on globally — they
+only ping on sessions where the user actually started the game.
+
+**Claude Code** — `~/.claude/settings.json`:
 
 ```jsonc
 {
   "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          { "type": "command", "command": "blunders-blitz hook claude" }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "hooks": [
-          { "type": "command", "command": "blunders-blitz hook claude" }
-        ]
-      }
-    ]
+    "Stop":         [{"hooks":[{"type":"command","command":"blunders-blitz hook claude"}]}],
+    "Notification": [{"hooks":[{"type":"command","command":"blunders-blitz hook claude"}]}]
   }
 }
 ```
 
-`blunders-blitz hook claude` (like the underlying `alert-if-running`) is a
-silent no-op when the chess server isn't up, so this hook block is safe to
-leave on globally — it only pings on sessions where the user actually
-started the game.
-
-## Wiring other agents
-
-The same `blunders-blitz hook <agent>` pattern works for non-Claude agents.
-Each one reads that agent's native hook event format on stdin, normalizes
-it to a `task.complete` / `input.required` / `error` event, and routes
-through the same dispatcher Claude uses. Like the Claude wiring, all of
-these are silent no-ops when the chess server isn't running.
-
-### Codex CLI
-
-Codex CLI fires a notify hook at end of turn. Add to `~/.codex/config.toml`:
+**Codex CLI** — `~/.codex/config.toml`:
 
 ```toml
 notify = ["blunders-blitz", "hook", "codex"]
@@ -139,13 +134,9 @@ Codex passes the event name as the first argument (e.g.
 `agent-turn-complete`, `permission-requested`) and an optional JSON
 payload on stdin. The translator detects permission-style events
 (including `notification_type = "permission_prompt"`) and routes them as
-"Needs your input"; everything else is treated as "Back to you." Errors
-from Codex error-style events surface as the red "Ran into an error"
-modal.
+"Needs your input"; everything else is treated as "Back to you."
 
-### Cursor
-
-Add to `~/.cursor/hooks.json`:
+**Cursor** — `~/.cursor/hooks.json`:
 
 ```json
 {
@@ -162,16 +153,24 @@ Add to `~/.cursor/hooks.json`:
 "Needs your input." `beforeReadFile` is intentionally dropped at the
 translator — it's far too chatty.
 
-### Gemini CLI
+**Gemini CLI** — `~/.gemini/settings.json`:
 
-Wire each Gemini hook event you care about to a command of the form
-`blunders-blitz hook gemini <EventName>`. The translator recognises
-`SessionStart` (skipped — no ping on session boot), `AfterAgent`
-(→ task.complete), `Notification` (→ input.required), and `AfterTool`
-(→ task.complete on success, → error on non-zero `exit_code`, with the
-captured `stderr` surfaced as the modal message).
+```json
+{
+  "hooks": {
+    "AfterAgent":   [{ "command": "blunders-blitz hook gemini AfterAgent" }],
+    "Notification": [{ "command": "blunders-blitz hook gemini Notification" }],
+    "AfterTool":    [{ "command": "blunders-blitz hook gemini AfterTool" }]
+  }
+}
+```
 
-### GitHub Copilot
+The translator recognises `SessionStart` (skipped — no ping on session
+boot), `AfterAgent` (→ task.complete), `Notification` (→ input.required),
+and `AfterTool` (→ task.complete on success, → error on non-zero
+`exit_code`, with the captured `stderr` surfaced as the modal message).
+
+**GitHub Copilot**
 
 Add to your repo's `.github/hooks/hooks.json`:
 

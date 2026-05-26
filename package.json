@@ -1,6 +1,6 @@
 {
   "name": "@blunders/blitz",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Standalone chess game vs Stockfish — designed to run while your LLM works in the background and ping you when it needs attention.",
   "type": "module",
   "bin": {
@@ -8,7 +8,12 @@
   },
   "scripts": {
     "start": "node server/server.mjs",
-    "dev": "node server/server.mjs"
+    "dev": "node server/server.mjs",
+    "postinstall": "node bin/postinstall.mjs"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "picocolors": "^1.1.1"
   },
   "engines": {
     "node": ">=18"

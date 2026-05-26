@@ -5,6 +5,48 @@ git commits but were not published to npm — the public release line
 jumps from `0.2.0` to `0.6.0` once the full multi-agent surface
 landed in a single coherent shape.
 
+## 0.7.0 — Interactive install wizard
+
+The multi-agent hooks added in 0.6.0 only solved half the problem —
+users still had to hand-edit each AI tool's config file to wire them
+in. 0.7.0 closes that loop with a TUI installer.
+
+### Added
+- **`blunders-blitz install`** — interactive setup wizard (clack
+  multiselect). Detects which AI tools you have installed
+  (`~/.claude/`, `~/.codex/`, `~/.cursor/`, `~/.gemini/`, and any git
+  repo for Copilot), pre-selects detected tools, and patches each
+  chosen tool's config file with the right hook entries. Writes are
+  atomic (tempfile + rename) and idempotent (re-running detects
+  existing entries and skips). Leaves a `.bak` of any file it modifies
+  on first edit. Refuses to overwrite an existing top-level
+  `notify = …` line in `~/.codex/config.toml` (you keep your config).
+- **`postinstall` script** — prints a one-line "next step" hint after
+  `npm install -g @blunders/blitz` pointing at `blunders-blitz install`.
+  Deliberately does NOT run the wizard during postinstall (CI breakage,
+  surprising prompts, `ignore-scripts` users would miss it).
+
+### Changed
+- README "Use it with an AI assistant" section now leads with a single
+  `blunders-blitz install` command.
+- SKILL.md restructured: "Easiest path" (`install`) first, manual
+  JSON/TOML snippets second for users who want to inspect or
+  customize the wiring.
+- The bin file is now safe to `import` from other Node modules — it
+  only runs `main()` when invoked directly. Per-host installer
+  functions (`installClaude`, `installCodex`, …) are now exported.
+
+### Removed (breaking)
+- **`blunders-blitz install-skill`** — fully removed. Its functionality
+  (copying SKILL.md into `~/.claude/skills/`) is folded into the new
+  `install` wizard's Claude Code step. Anyone hitting the old verb
+  gets a clear error message pointing at `install`.
+
+### Dependencies
+- Adds `@clack/prompts` and `picocolors` as direct runtime dependencies
+  (transitive: `@clack/core`, `sisteransi`). Tarball grows by ~50 kB;
+  total deps remain modest. The "zero deps" boast no longer holds.
+
 ## 0.6.0 — Multi-agent hook support
 
 This release rolls up the internal `0.3.0`–`0.5.0` work into one public

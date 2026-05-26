@@ -75,32 +75,35 @@ Override the port: `blunders-blitz start --port 8765`.
 
 ## Use it with an AI assistant
 
-The skill at [`skill/SKILL.md`](skill/SKILL.md) is written for Claude Code but
-the pattern works for any agentic CLI tool that can shell out.
-
-**Claude Code** — one-step install of the skill:
+One-step setup for every supported tool:
 
 ```bash
-blunders-blitz install-skill
+blunders-blitz install
 ```
 
-That copies `SKILL.md` into `~/.claude/skills/blunders-blitz/`. (Pass
-`--dir <path>` to install elsewhere, or `--force` to overwrite.)
+That launches an interactive picker, detects which AI tools you have
+installed (`~/.claude/`, `~/.codex/`, `~/.cursor/`, `~/.gemini/`, and any
+git repo for Copilot's per-repo config), and patches each chosen tool's
+hook config to ping the chess tab when the agent finishes or needs your
+input. Idempotent (re-run safely), atomic, and leaves a `.bak` of any
+file it modifies on first edit.
+
+Currently supports **Claude Code**, **OpenAI Codex CLI**, **Cursor**,
+**Gemini CLI**, and **GitHub Copilot**. Per-tool details and the exact
+JSON/TOML the wizard writes are in [`skill/SKILL.md`](skill/SKILL.md) if
+you'd rather wire it manually or inspect the diff first.
 
 Then in your session:
 
 > "I want to play chess while you implement the new auth flow."
 
-Claude will run `blunders-blitz start`, work on the task, then call
-`blunders-blitz alert "..."` when it's done. After you reply, it'll
-`blunders-blitz dismiss` so the dialog disappears.
+The agent will run `blunders-blitz start`, work on the task, and the
+hook will fire `blunders-blitz alert` when it's done. After you reply,
+the agent runs `blunders-blitz dismiss` so the dialog disappears.
 
-**Other tools (Codex, Cursor, Gemini, Copilot, generic shell-equipped LLMs)**
-— the same CLI verbs work. The most reliable path is to wire the agent's
-hook system to `blunders-blitz hook <agent>`; per-agent snippets are in
-[`skill/SKILL.md`](skill/SKILL.md). For agents without a hook system,
-just tell the tool: "When you need my attention, run
-`blunders-blitz alert '<message>'`. When I respond, run `blunders-blitz dismiss`."
+For agents without a hook system, just tell the tool: "When you need my
+attention, run `blunders-blitz alert '<message>'`. When I respond, run
+`blunders-blitz dismiss`."
 
 ## Deploying as a static site
 

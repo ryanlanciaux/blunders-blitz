@@ -11,10 +11,18 @@
 //   handle-event      (reads normalized JSON event on stdin and routes it)
 //   hook <agent>      (translates an agent's native hook payload, then routes)
 //                       agents: claude, codex, cursor, gemini, copilot
-//   install-skill     [--dir <skills-dir>] [--force]
+//   install           (interactive TUI: detect tools, multiselect, patch configs)
 
 import { spawn } from "node:child_process";
-import { readFile, writeFile, mkdir, rm, copyFile, stat } from "node:fs/promises";
+import {
+  readFile,
+  writeFile,
+  mkdir,
+  rm,
+  copyFile,
+  stat,
+  rename,
+} from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { homedir, platform } from "node:os";
@@ -265,27 +273,324 @@ async function cmdDismiss() {
   return 0;
 }
 
-async function cmdInstallSkill(args) {
-  const target =
-    (typeof args.flags.dir === "string" && args.flags.dir) ||
-    join(homedir(), ".claude", "skills", "blunders-blitz");
-  const source = join(PROJECT_ROOT, "skill", "SKILL.md");
-  const dest = join(target, "SKILL.md");
+// ─── Install wizard ─────────────────────────────────────────────────────────
+//
+// `blunders-blitz install` is the user-facing setup flow. It detects which
+// AI tools the user has installed, presents a clack-driven multiselect, and
+// patches each chosen tool's config file with the right hook entry. All
+// writes are atomic (tempfile + rename) and idempotent (re-running detects
+// our existing entries and skips). The first edit of each file leaves a
+// `.bak` alongside it.
 
-  let exists = false;
+async function existsAsync(p) {
   try {
-    await stat(dest);
-    exists = true;
+    await stat(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readJsonOrEmpty(path) {
+  try {
+    return JSON.parse(await readFile(path, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+async function writeAtomic(path, content) {
+  await mkdir(dirname(path), { recursive: true });
+  // Back up the original on first edit so the user can recover by hand.
+  try {
+    await stat(path);
+    const bak = path + ".bak";
+    if (!(await existsAsync(bak))) await copyFile(path, bak);
   } catch {}
-  if (exists && !args.flags.force) {
-    console.error(`✗ ${dest} already exists. Re-run with --force to overwrite.`);
+  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(tmp, content);
+  await rename(tmp, path);
+}
+
+async function writeJsonAtomic(path, obj) {
+  await writeAtomic(path, JSON.stringify(obj, null, 2) + "\n");
+}
+
+async function detectGitRoot() {
+  return new Promise((resolveP) => {
+    const p = spawn("git", ["rev-parse", "--show-toplevel"], {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    let out = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.on("error", () => resolveP(null));
+    p.on("exit", (code) => resolveP(code === 0 ? out.trim() : null));
+  });
+}
+
+export async function installClaude() {
+  const settingsPath = join(homedir(), ".claude", "settings.json");
+  const cfg = (await readJsonOrEmpty(settingsPath)) || {};
+  cfg.hooks = cfg.hooks || {};
+  let added = 0;
+  for (const event of ["Stop", "Notification"]) {
+    cfg.hooks[event] = cfg.hooks[event] || [];
+    const already = cfg.hooks[event].some((wrapper) =>
+      (wrapper.hooks || []).some(
+        (h) => h.command && h.command.includes("blunders-blitz hook claude")
+      )
+    );
+    if (already) continue;
+    cfg.hooks[event].push({
+      hooks: [{ type: "command", command: "blunders-blitz hook claude" }],
+    });
+    added++;
+  }
+  if (added) await writeJsonAtomic(settingsPath, cfg);
+
+  // Also copy SKILL.md so Claude has the natural-language instructions.
+  const skillTarget = join(homedir(), ".claude", "skills", "blunders-blitz");
+  await mkdir(skillTarget, { recursive: true });
+  await copyFile(
+    join(PROJECT_ROOT, "skill", "SKILL.md"),
+    join(skillTarget, "SKILL.md")
+  );
+
+  const hookMsg = added ? `added ${added} hook(s)` : "hooks already present";
+  return `${hookMsg}; refreshed SKILL.md`;
+}
+
+export async function installCodex() {
+  const cfgPath = join(homedir(), ".codex", "config.toml");
+  const desiredLine = 'notify = ["blunders-blitz", "hook", "codex"]';
+  let body = "";
+  try {
+    body = await readFile(cfgPath, "utf-8");
+  } catch {}
+
+  if (
+    body.includes('"blunders-blitz"') &&
+    body.includes('"hook"') &&
+    body.includes('"codex"')
+  ) {
+    return "already wired";
+  }
+
+  // If a top-level `notify =` already exists (not inside a [section]), leave
+  // it alone — overwriting the user's notify config silently would be rude.
+  let inSection = false;
+  for (const line of body.split(/\r?\n/)) {
+    if (/^\s*\[/.test(line)) inSection = true;
+    if (!inSection && /^\s*notify\s*=/.test(line)) {
+      throw new Error(
+        "an existing `notify =` line is in ~/.codex/config.toml; edit it by hand"
+      );
+    }
+  }
+
+  if (body && !body.endsWith("\n")) body += "\n";
+  await writeAtomic(cfgPath, body + desiredLine + "\n");
+  return "added notify line";
+}
+
+export async function installCursor() {
+  const cfgPath = join(homedir(), ".cursor", "hooks.json");
+  const cfg = (await readJsonOrEmpty(cfgPath)) || {};
+  cfg.hooks = cfg.hooks || [];
+  const desired = [
+    { event: "stop", command: "blunders-blitz hook cursor stop" },
+    {
+      event: "beforeShellExecution",
+      command: "blunders-blitz hook cursor beforeShellExecution",
+    },
+    {
+      event: "beforeMCPExecution",
+      command: "blunders-blitz hook cursor beforeMCPExecution",
+    },
+  ];
+  let added = 0;
+  for (const entry of desired) {
+    const already = cfg.hooks.some(
+      (h) =>
+        h.event === entry.event &&
+        h.command &&
+        h.command.includes("blunders-blitz hook cursor")
+    );
+    if (already) continue;
+    cfg.hooks.push(entry);
+    added++;
+  }
+  if (added) await writeJsonAtomic(cfgPath, cfg);
+  return added ? `added ${added} hook(s)` : "already wired";
+}
+
+export async function installGemini() {
+  const cfgPath = join(homedir(), ".gemini", "settings.json");
+  const cfg = (await readJsonOrEmpty(cfgPath)) || {};
+  cfg.hooks = cfg.hooks || {};
+  // SessionStart is intentionally skipped (we don't ping on session boot).
+  const events = ["AfterAgent", "Notification", "AfterTool"];
+  let added = 0;
+  for (const event of events) {
+    cfg.hooks[event] = cfg.hooks[event] || [];
+    const already = cfg.hooks[event].some(
+      (h) => h.command && h.command.includes("blunders-blitz hook gemini")
+    );
+    if (already) continue;
+    cfg.hooks[event].push({
+      command: `blunders-blitz hook gemini ${event}`,
+    });
+    added++;
+  }
+  if (added) await writeJsonAtomic(cfgPath, cfg);
+  return added ? `added ${added} hook(s)` : "already wired";
+}
+
+export async function installCopilot() {
+  const root = await detectGitRoot();
+  if (!root) {
+    throw new Error(
+      "not in a git repo (Copilot hooks are per-repo — re-run from the repo root)"
+    );
+  }
+  const cfgPath = join(root, ".github", "hooks", "hooks.json");
+  const cfg = (await readJsonOrEmpty(cfgPath)) || { version: 1, hooks: {} };
+  cfg.version = cfg.version || 1;
+  cfg.hooks = cfg.hooks || {};
+  const events = [
+    {
+      name: "postToolUse",
+      bash: "blunders-blitz hook copilot postToolUse",
+    },
+    {
+      name: "errorOccurred",
+      bash: "blunders-blitz hook copilot errorOccurred",
+    },
+  ];
+  let added = 0;
+  for (const e of events) {
+    cfg.hooks[e.name] = cfg.hooks[e.name] || [];
+    const already = cfg.hooks[e.name].some(
+      (h) => h.bash && h.bash.includes("blunders-blitz hook copilot")
+    );
+    if (already) continue;
+    cfg.hooks[e.name].push({ type: "command", bash: e.bash });
+    added++;
+  }
+  if (added) await writeJsonAtomic(cfgPath, cfg);
+  return added ? `added ${added} hook(s) → ${cfgPath}` : "already wired";
+}
+
+const HOSTS = [
+  {
+    id: "claude",
+    label: "Claude Code",
+    hint: "~/.claude/settings.json + SKILL.md",
+    detect: () => existsAsync(join(homedir(), ".claude")),
+    install: installClaude,
+  },
+  {
+    id: "codex",
+    label: "Codex CLI",
+    hint: "~/.codex/config.toml",
+    detect: () => existsAsync(join(homedir(), ".codex")),
+    install: installCodex,
+  },
+  {
+    id: "cursor",
+    label: "Cursor",
+    hint: "~/.cursor/hooks.json",
+    detect: () => existsAsync(join(homedir(), ".cursor")),
+    install: installCursor,
+  },
+  {
+    id: "gemini",
+    label: "Gemini CLI",
+    hint: "~/.gemini/settings.json",
+    detect: () => existsAsync(join(homedir(), ".gemini")),
+    install: installGemini,
+  },
+  {
+    id: "copilot",
+    label: "GitHub Copilot",
+    hint: "<repo>/.github/hooks/hooks.json (per-repo)",
+    detect: async () => Boolean(await detectGitRoot()),
+    install: installCopilot,
+  },
+];
+
+async function cmdInstall() {
+  let clack;
+  let pc;
+  try {
+    clack = await import("@clack/prompts");
+    pc = (await import("picocolors")).default;
+  } catch {
+    console.error(
+      "✗ install requires @clack/prompts and picocolors (npm dependencies)."
+    );
+    console.error(
+      "  These ship with @blunders/blitz. If you cloned the repo, run `npm install` first."
+    );
     return 1;
   }
 
-  await mkdir(target, { recursive: true });
-  await copyFile(source, dest);
-  console.log(`▸ installed skill → ${dest}`);
-  console.log(`  Restart Claude Code (or reload skills) and ask it to play chess while it works.`);
+  clack.intro(pc.bold("Blunders Blitz — setup"));
+
+  const detection = {};
+  for (const host of HOSTS) detection[host.id] = await host.detect();
+  const anyDetected = Object.values(detection).some(Boolean);
+
+  const options = HOSTS.map((host) => ({
+    value: host.id,
+    label: host.label + (detection[host.id] ? "" : pc.dim(" (not detected)")),
+    hint: host.hint,
+  }));
+  const initialValues = HOSTS.filter((h) => detection[h.id]).map((h) => h.id);
+
+  if (!anyDetected) {
+    clack.note(
+      "Didn't detect any AI tool config dirs. You can still install for tools\nyou plan to set up later — just pick them below.",
+      "Heads up"
+    );
+  }
+
+  const picked = await clack.multiselect({
+    message: "Wire blunders-blitz hooks into which tools?",
+    options,
+    initialValues,
+    required: false,
+  });
+  if (clack.isCancel(picked)) {
+    clack.cancel("Cancelled — no files changed.");
+    return 0;
+  }
+  if (!picked.length) {
+    clack.outro("Nothing selected — no files changed.");
+    return 0;
+  }
+
+  for (const id of picked) {
+    const host = HOSTS.find((h) => h.id === id);
+    const s = clack.spinner();
+    s.start(`Wiring ${host.label}…`);
+    try {
+      const result = await host.install();
+      s.stop(`${pc.green("✓")} ${host.label}: ${result}`);
+    } catch (err) {
+      s.stop(`${pc.red("✗")} ${host.label}: ${err.message}`);
+    }
+  }
+
+  clack.note(
+    [
+      "Restart any running tool (Claude Code, Cursor) so it picks up new hooks.",
+      "Run `blunders-blitz start` to launch the chess companion.",
+      "Re-run `blunders-blitz install` anytime to add tools or refresh SKILL.md.",
+    ].join("\n"),
+    "Next"
+  );
+  clack.outro("Done.");
   return 0;
 }
 
@@ -591,7 +896,7 @@ Usage:
   blunders-blitz dismiss
   blunders-blitz handle-event                       # reads normalized event JSON on stdin
   blunders-blitz hook <agent>                       # claude | codex | cursor | gemini | copilot
-  blunders-blitz install-skill [--dir <skills-dir>] [--force]
+  blunders-blitz install                            # interactive setup: pick tools, patch configs
 
 Environment:
   BLUNDERS_BLITZ_PORT       default port for "start" (default 7878)
@@ -602,10 +907,8 @@ Typical usage from an assistant:
   blunders-blitz alert "Need your input on Foo"    # ping when done
   blunders-blitz dismiss                           # clear when user replies
 
-Wiring into an agent's hook system (preferred over manual alerts):
-  Claude Code:   add a Stop hook that runs:   blunders-blitz hook claude
-  Codex CLI:     notify = ["blunders-blitz", "hook", "codex"]
-  See SKILL.md for full per-agent wiring.
+First-time setup:
+  blunders-blitz install                           # walks you through wiring each AI tool
 `);
 }
 
@@ -633,8 +936,14 @@ async function main() {
       return cmdHook(args);
     case "dismiss":
       return cmdDismiss();
+    case "install":
+      return cmdInstall();
     case "install-skill":
-      return cmdInstallSkill(args);
+      console.error(
+        "✗ `install-skill` was removed in 0.7.0. Run `blunders-blitz install` instead —\n" +
+          "  it covers Claude Code (SKILL.md + hooks) plus Codex / Cursor / Gemini / Copilot."
+      );
+      return 1;
     default:
       console.error(`✗ unknown command: ${cmd}\n`);
       printHelp();
@@ -642,10 +951,13 @@ async function main() {
   }
 }
 
-main().then(
-  (code) => process.exit(code || 0),
-  (err) => {
-    console.error("✗", err.stack || err.message);
-    process.exit(1);
-  }
-);
+// Only run main when invoked as a CLI, not when imported as a module.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().then(
+    (code) => process.exit(code || 0),
+    (err) => {
+      console.error("✗", err.stack || err.message);
+      process.exit(1);
+    }
+  );
+}
