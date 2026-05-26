@@ -7,35 +7,6 @@ you don't miss it.
 Built as a skill for Claude Code — works with any agentic CLI that can shell
 out (Codex, Cursor, generic shell-equipped LLMs).
 
-```
-┌──────────────────────────────────────────┐
-│   Browser tab                            │
-│   ┌────────────┐  ┌──────────────────┐   │
-│   │            │  │ Strength: 1400   │   │
-│   │  chess     │  │ Status: Your move│   │
-│   │  board     │  │ Moves: 1. e4 e5  │   │
-│   │            │  │  ...              │   │
-│   └────────────┘  └──────────────────┘   │
-│                                          │
-│   ┌─ "Needs your attention" ──────────┐  │
-│   │  Claude finished the migration.   │  │
-│   │            [ Got it ]             │  │
-│   └───────────────────────────────────┘  │
-└────────────▲─────────────────────────────┘
-             │ SSE  ▲ POST /alert  ▲ POST /dismiss
-             │      │              │
-   ┌─────────┴──────┴──────────────┴────┐
-   │  blunders-blitz (Node, zero-dep)   │
-   │  serves /public, holds alert state │
-   └────────────────────────────────────┘
-             ▲
-             │
-   ┌─────────┴──────────┐
-   │  CLI: blunders-blitz│ ← drives it from your terminal /
-   │  start | alert | …  │   from your AI assistant's shell
-   └─────────────────────┘
-```
-
 ## Install
 
 No install needed — just use `npx`:

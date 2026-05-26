@@ -5,6 +5,28 @@ git commits but were not published to npm — the public release line
 jumps from `0.2.0` to `0.6.0` once the full multi-agent surface
 landed in a single coherent shape.
 
+## 0.7.2 — Stockfish out of git, fetched at install
+
+### Changed
+- **Stockfish binaries are no longer committed to the repo.** The 7 MB
+  `stockfish.wasm` and its JS loader shim now live outside git
+  (`.gitignore`d) and are downloaded by `bin/postinstall.mjs` from a
+  pinned `unpkg.com/stockfish@17.1.0` URL. SHA256 is verified against
+  hardcoded hashes before the files are written (bit-for-bit identical
+  to what was previously vendored — the official `lite-single` build
+  by nmrugg / Chess.com). The fetch is atomic, idempotent (skipped
+  when files are already correct), and never fails `npm install` on
+  network errors — it prints a recovery hint instead.
+- **License & attribution files stay committed.** `LICENSE-stockfish.txt`,
+  `AUTHORS-stockfish.txt`, and `public/stockfish/README.md` remain in
+  git so the GPLv3 obligations (license, authorship, pointer to
+  Corresponding Source) travel with the source distribution. The npm
+  tarball still bundles the binaries via the `files:` whitelist, so
+  `npm install -g @blunders/blitz` does not gain a network dependency
+  — only fresh `git clone` contributors trigger the fetch.
+- **README cleanup.** Dropped the ASCII architecture diagram from the
+  top of the README; docs now lead with the install section.
+
 ## 0.7.1 — Symlink-safe main entry
 
 ### Fixed

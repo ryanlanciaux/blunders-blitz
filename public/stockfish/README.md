@@ -1,29 +1,34 @@
-# Stockfish — vendored, GPLv3
+# Stockfish — fetched at install time, GPLv3
 
-The files in this directory are part of the **Stockfish** chess engine,
-distributed under the **GNU General Public License version 3 (GPLv3)**. They
-are bundled with Blunders Blitz unmodified and run in the browser as a
-separate WebAssembly worker. Blunders Blitz's own code (MIT licensed) does
-not link against Stockfish source — it communicates with the engine via the
-standard UCI message protocol over `postMessage`.
+The Stockfish chess engine runs in the browser as a separate WebAssembly
+worker. The two runtime files live in this directory:
 
-## What's here
-
-| File | Purpose |
+| File | Source of truth |
 | --- | --- |
 | `stockfish.js`   | Worker loader / JS shim around the WebAssembly module. |
-| `stockfish.wasm` | The compiled Stockfish engine. |
-| `LICENSE-stockfish.txt` | Full GPLv3 license text. |
-| `AUTHORS-stockfish.txt` | List of Stockfish contributors. |
+| `stockfish.wasm` | The compiled Stockfish engine (~7 MB). |
+
+Both are **not committed to git**. They're downloaded on `npm install` by
+[`bin/postinstall.mjs`](../../bin/postinstall.mjs) from
+`https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.{js,wasm}`
+— the official `stockfish` package on npm, by Nathan Rugg / Chess.com — and
+verified against pinned SHA256 hashes before being written to disk. The
+published npm tarball for `@blunders/blitz` ships the binaries too, so an
+`npm install -g @blunders/blitz` doesn't need to hit the network for them.
+
+The license metadata files (this `README.md`, `LICENSE-stockfish.txt`,
+`AUTHORS-stockfish.txt`) **are** committed — they need to travel with the
+binaries wherever they're distributed.
 
 ## Version & source
 
-The bundled build is **Stockfish.js 17.1** (the JS/WASM port maintained by
+The pinned build is **Stockfish.js 17.1** (the JS/WASM port maintained by
 Nathan Rugg). The corresponding source code — required to satisfy GPLv3's
 source-availability obligation — is publicly available at:
 
 - **Stockfish.js port (the WASM build):** https://github.com/nmrugg/stockfish.js
 - **Upstream Stockfish engine:** https://github.com/official-stockfish/Stockfish
+- **npm release used for the fetch:** https://www.npmjs.com/package/stockfish/v/17.1.0
 
 If you are redistributing this project (forking, mirroring, republishing to
 npm, hosting a copy, etc.), you must:

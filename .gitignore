@@ -6,3 +6,8 @@ node_modules/
 dist/
 *.log
 plan.md
+
+# Stockfish engine binaries — fetched at install time by bin/postinstall.mjs,
+# pinned to stockfish@17.1.0 lite-single. See public/stockfish/README.md.
+public/stockfish/stockfish.js
+public/stockfish/stockfish.wasm
