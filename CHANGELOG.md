@@ -5,6 +5,15 @@ git commits but were not published to npm — the public release line
 jumps from `0.2.0` to `0.6.0` once the full multi-agent surface
 landed in a single coherent shape.
 
+## 0.7.3 — Trim deployment docs from README
+
+### Changed
+- **Dropped the "Deploying as a static site" section from the README**
+  (Cloudflare Pages / Netlify / Vercel / Nginx subsections plus the
+  production alert-channel note). Blunders Blitz is a local-only
+  companion app — the hosted-site path was a distraction from the
+  CLI install flow it's actually built for.
+
 ## 0.7.2 — Stockfish out of git, fetched at install
 
 ### Changed

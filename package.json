@@ -1,6 +1,6 @@
 {
   "name": "@blunders/blitz",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Standalone chess game vs Stockfish — designed to run while your LLM works in the background and ping you when it needs attention.",
   "type": "module",
   "bin": {

@@ -76,46 +76,6 @@ For agents without a hook system, just tell the tool: "When you need my
 attention, run `blunders-blitz alert '<message>'`. When I respond, run
 `blunders-blitz dismiss`."
 
-## Deploying as a static site
-
-The `public/` directory is a fully static site — drop it onto any static host.
-The agent-ping channel naturally degrades to "static only" when there's no
-local server backing `/events`.
-
-### Cloudflare Pages
-
-```bash
-# from the project root
-npx wrangler pages deploy public --project-name blunders-blitz
-```
-
-Then add a custom domain in the Pages dashboard pointing at this project.
-
-### Netlify / Vercel
-
-Both work the same way. Point the deploy at `public/` as the publish
-directory, no build step. Example `netlify.toml`:
-
-```toml
-[build]
-publish = "public"
-```
-
-### Nginx / Caddy / S3
-
-Just serve `public/` as a static site. The `.wasm` MIME type is the only
-catch — make sure your host serves `application/wasm` for `.wasm` files
-(Cloudflare/Netlify/Vercel handle this automatically).
-
-### A note on the alert channel in production
-
-The `/events`, `/alert`, `/dismiss` endpoints only exist on the **local**
-Node server. On a deployed subdomain they 404 silently and the UI shows
-"static mode (no agent channel)". That's deliberate — the ping feature is
-designed for local development where your AI assistant runs on the same
-machine. If you want a hosted ping channel later, a tiny Cloudflare
-Worker with Durable Object state could implement the same three endpoints.
-
 ## Project layout
 
 ```
