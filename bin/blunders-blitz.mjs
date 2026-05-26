@@ -23,6 +23,7 @@ import {
   stat,
   rename,
 } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { homedir, platform } from "node:os";
@@ -952,7 +953,22 @@ async function main() {
 }
 
 // Only run main when invoked as a CLI, not when imported as a module.
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// realpath both sides so the npm bin symlink (and other wrappers like asdf
+// shims) resolves to the same path as `import.meta.url`. Without this,
+// invoking through any symlink produces no output at all.
+function isCliEntry() {
+  if (!process.argv[1]) return false;
+  try {
+    return (
+      realpathSync(process.argv[1]) ===
+      realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+}
+
+if (isCliEntry()) {
   main().then(
     (code) => process.exit(code || 0),
     (err) => {

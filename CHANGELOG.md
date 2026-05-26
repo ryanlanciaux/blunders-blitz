@@ -5,6 +5,19 @@ git commits but were not published to npm — the public release line
 jumps from `0.2.0` to `0.6.0` once the full multi-agent surface
 landed in a single coherent shape.
 
+## 0.7.1 — Symlink-safe main entry
+
+### Fixed
+- **Silent CLI when installed globally.** 0.7.0 added an `isMain` guard
+  so the bin file could be imported without executing `main()`, but the
+  guard compared `process.argv[1]` against `import.meta.url` literally.
+  When npm installs the package globally it creates a symlink in the
+  global bin dir; the symlink path and the resolved mjs path didn't
+  match, so `main()` never ran and every command (including `--help`)
+  produced no output. Now `realpath`s both sides before comparing, so
+  npm global symlinks, asdf shims, and chained wrappers all resolve to
+  the same canonical path. Reproduced and verified end-to-end.
+
 ## 0.7.0 — Interactive install wizard
 
 The multi-agent hooks added in 0.6.0 only solved half the problem —
